@@ -1,0 +1,144 @@
+---
+title: "Final project"
+author: "Duy Nguyen"
+date: "7/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+countries_aggregated = read.csv("data/countries-aggregated.csv")
+key_countries_pivoted = read.csv("data/key-countries-pivoted.csv")
+reference = read.csv("data/reference.csv")
+time_series_19_covid_combined = read.csv("data/time-series-19-covid-combined.csv")
+us_confirmed = read.csv("data/us_confirmed.csv")
+us_deaths = read.csv("data/us_deaths.csv")
+worldwide_aggregated = read.csv("data/worldwide-aggregated.csv")
+world_cities = read.csv("data/worldcities.csv")
+Statewide = read.csv("data/Statewide (1).csv")
+```
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(plotly)
+library(leaflet)
+library(sp)
+library(flexdashboard)
+library(broom)
+library(modelr)
+```
+
+```{r}
+
+us_confirmed_updated = us_confirmed %>%
+  group_by(Province.State) %>%
+  summarize(
+    Lat = mean(Lat),
+    Long = mean(Long),
+    total_cases = sum(Case)
+  )
+  
+us_confirmed_updated
+```
+
+```{r}
+  us_confirmed_updated %>%
+    leaflet() %>%
+    addProviderTiles("OpenStreetMap.Mapnik") %>%
+    addMarkers(
+      lng = ~Long,
+      lat = ~Lat,
+      popup = ~paste("</h3><br>","State:", Province.State, "</h3><br>","Cases:", total_cases,  sep=" ")
+    ) 
+```
+
+```{r}
+ggplotly(us_confirmed_updated %>%
+  ggplot() + geom_col(mapping=aes(x=Province.State, y=total_cases)))
+```
+```{r}
+ggplotly(Statewide %>%
+  ggplot() + geom_col(mapping=aes(x=State, y=Effective.Date))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)))
+```
+
+
+```{r}
+reference_updated = reference %>%  drop_na() %>%
+    group_by(Province.State) %>%
+    summarize(
+      total_pop = sum(Population)
+    )
+ggplotly(reference_updated %>%
+  ggplot() + geom_col(mapping=aes(x=Province.State, y=total_pop))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)))
+
+```
+```{r}
+us_confirmed_updated1 = us_confirmed %>%
+  group_by(Province.State) %>%
+  summarize(
+    total_cases = sum(Case)
+  )
+```
+
+```{r}
+library(dplyr)
+us_confirmed_pop = reference_updated %>% inner_join(us_confirmed_updated1 , by="Province.State")
+us_confirmed_pop
+```
+
+```{r}
+confirmed_pop_model = lm(total_pop~total_cases, data=us_confirmed_pop)
+confirmed_pop_model%>%
+  glance()
+```
+
+
+```{r}
+confirmed_pop_df = us_confirmed_pop %>%
+  add_predictions(confirmed_pop_model)%>%
+  add_residuals(confirmed_pop_model)
+confirmed_pop_df
+```
+
+```{r}
+ggplot(confirmed_pop_df) +
+  geom_point(mapping = aes(x = pred, y = total_cases)) +
+  geom_abline(slope = 1, intercept = 0, color="red")
+```
+```{r}
+ggplot(confirmed_pop_df) +
+  geom_point(mapping = aes(x = pred, y = total_cases)) +
+  geom_abline(slope = confirmed_pop_model$coefficients[2], intercept = confirmed_pop_model$coefficients[1], color="red")
+```
+
+```{r}
+confirmed_pop_df %>%
+  ggplot()+geom_histogram(mapping=aes(x=resid), bins=30)
+```
+
+
+
+
+
